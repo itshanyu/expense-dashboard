@@ -1,9 +1,11 @@
-/* 記帳儀表板 — 讀 data.json 快照（export_snapshot.py 產生） */
+/* 記帳儀表板 — 讀 data.json 快照（export_snapshot.py 產生）
+   支援兩種模式：
+   - summary（公開 Pages 版）：只有月總額/月×分類/日總額，無明細無備註
+   - full（本機版）：含單筆明細與備註
+*/
 "use strict";
 
-const TAIPEI_TZ = "Asia/Taipei";
-
-// ── 台灣綜所稅級距速算（2024 起適用，不含扣除額，粗算用）──
+// ── 台灣綜所稅級距速算（不含扣除額，粗算用）──
 const TAX_BRACKETS = [
   { limit: 590000, rate: 0.05 },
   { limit: 1330000, rate: 0.12 },
@@ -28,7 +30,6 @@ function fmt(n) {
   return "$" + Math.round(n).toLocaleString("zh-TW");
 }
 
-// ── 載入快照 ──
 let SNAPSHOT = null;
 
 async function loadSnapshot() {
@@ -36,32 +37,35 @@ async function loadSnapshot() {
   if (!res.ok) throw new Error("data.json 讀取失敗：" + res.status);
   SNAPSHOT = await res.json();
   document.getElementById("updated-at").textContent =
-    "資料更新於 " + SNAPSHOT.generatedAt.replace("T", " ").slice(0, 16);
+    "資料更新於 " + SNAPSHOT.generatedAt.replace("T", " ").slice(0, 16) +
+    (SNAPSHOT.mode === "summary" ? "（摘要版）" : "");
 }
 
-// ── 資料整理 ──
-function parseRecords() {
-  return (SNAPSHOT.records || []).map(r => ({
-    date: r.date,                       // YYYY-MM-DD
-    amount: Number(r.amount) || 0,
-    category: r.category || "其他",
-    note: r.note || "",
-  })).filter(r => r.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.date));
-}
-
-function monthKey(dateStr) { return dateStr.slice(0, 7); }
-
-function summarize(records) {
+// ── 統一取資料介面：把 summary/full 轉成圖表需要的形狀 ──
+function getData() {
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0, 7); //近似即可，快照同步在台北白天
+  const thisMonth = now.toISOString().slice(0, 7);
 
-  const byMonth = {};
-  const byMonthCat = {};
-  for (const r of records) {
-    const m = monthKey(r.date);
-    byMonth[m] = (byMonth[m] || 0) + r.amount;
-    byMonthCat[m] = byMonthCat[m] || {};
-    byMonthCat[m][r.category] = (byMonthCat[m][r.category] || 0) + r.amount;
+  let byMonth = {}, byMonthCat = {}, dailyTotals = {}, months = [];
+
+  if (SNAPSHOT.mode === "summary") {
+    byMonth = SNAPSHOT.byMonth || {};
+    byMonthCat = SNAPSHOT.byMonthCategory || {};
+    dailyTotals = SNAPSHOT.byDay || {};
+    months = Object.keys(byMonth).sort();
+  } else {
+    const catMap = {};
+    for (const r of (SNAPSHOT.records || [])) {
+      const amount = Number(r.amount) || 0;
+      if (amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) continue;
+      const m = r.date.slice(0, 7);
+      byMonth[m] = (byMonth[m] || 0) + amount;
+      catMap[m] = catMap[m] || {};
+      catMap[m][r.category] = (catMap[m][r.category] || 0) + amount;
+      dailyTotals[r.date] = (dailyTotals[r.date] || 0) + amount;
+    }
+    byMonthCat = catMap;
+    months = Object.keys(byMonth).sort();
   }
 
   const monthTotal = byMonth[thisMonth] || 0;
@@ -70,10 +74,11 @@ function summarize(records) {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const projection = dailyAvg * daysInMonth;
 
-  const months = Object.keys(byMonth).sort();
-  const baseline = months.length ? months.reduce((s, m) => s + byMonth[m], 0) / months.length : 0;
+  const baseline = months.length
+    ? months.reduce((s, m) => s + byMonth[m], 0) / months.length
+    : 0;
 
-  return { thisMonth, byMonth, byMonthCat, monthTotal, dailyAvg, projection, baseline, months };
+  return { thisMonth, byMonth, byMonthCat, dailyTotals, monthTotal, dailyAvg, projection, baseline, months };
 }
 
 // ── 圖表 ──
@@ -96,22 +101,19 @@ function drawPie(catTotals) {
   });
 }
 
-function drawTrend(records) {
+function drawTrend(dailyTotals) {
   const days = [];
-  const totals = {};
   for (let i = 29; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    days.push(key);
+    days.push(d.toISOString().slice(0, 10));
   }
-  for (const r of records) totals[r.date] = (totals[r.date] || 0) + r.amount;
   new Chart(document.getElementById("trend-chart"), {
     type: "line",
     data: {
       labels: days.map(d => d.slice(5)),
       datasets: [{
         label: "當日支出",
-        data: days.map(d => totals[d] || 0),
+        data: days.map(d => dailyTotals[d] || 0),
         borderColor: "#c76f88", backgroundColor: "rgba(232,162,180,0.25)",
         fill: true, tension: 0.35, pointRadius: 2.5,
       }],
@@ -155,15 +157,12 @@ function setupEstimator(sum) {
     const inflation = (Number($("in-inflation").value) || 0) / 100;
     const years = Number($("in-years").value) || 0;
 
-    // 通膨調整：理想支出隨年數放大
     const factor = Math.pow(1 + inflation, years);
     const ideal = ideal0 * factor;
     $("r-years-label").textContent = years > 0 ? `${years} 年後` : "今年";
 
-    // 現況基準
     $("r-baseline").textContent = fmt(sum.baseline);
 
-    // 收入稅後
     let netMonthly = null;
     if (income > 0) {
       const tax = taxAnnual(income * 12);
@@ -175,8 +174,6 @@ function setupEstimator(sum) {
       $("r-net").textContent = "—";
     }
 
-    // 要過理想生活所需的稅前月收入：反推
-    // 需要稅後 = ideal → 稅前月收入 gross 使 ((gross*12 - tax(gross*12))/12) >= ideal
     let needed = null;
     if (ideal > 0) {
       let lo = 0, hi = ideal * 4 + 1000000;
@@ -191,7 +188,6 @@ function setupEstimator(sum) {
       $("r-needed").textContent = "—";
     }
 
-    // 判定
     const verdict = $("r-verdict");
     verdict.className = "verdict";
     if (ideal > 0 && netMonthly != null) {
@@ -209,8 +205,6 @@ function setupEstimator(sum) {
   }
 
   inputs.forEach(el => el.addEventListener("input", compute));
-
-  // 用實際月均先幫使用者帶入理想支出預設值（方便起步）
   if (sum.baseline > 0) $("in-ideal").placeholder = `例：${Math.round(sum.baseline / 1000) * 1000}`;
   compute();
 }
@@ -223,8 +217,7 @@ function setupEstimator(sum) {
     document.getElementById("updated-at").textContent = "資料載入失敗：" + e.message;
     return;
   }
-  const records = parseRecords();
-  const sum = summarize(records);
+  const sum = getData();
 
   document.getElementById("month-total").textContent = fmt(sum.monthTotal);
   document.getElementById("month-range").textContent = sum.thisMonth;
@@ -233,7 +226,7 @@ function setupEstimator(sum) {
   document.getElementById("baseline").textContent = fmt(sum.baseline);
 
   drawPie(sum.byMonthCat[sum.thisMonth] || {});
-  drawTrend(records);
+  drawTrend(sum.dailyTotals);
   drawMonthly(sum.byMonth, sum.months);
   setupEstimator(sum);
 })();

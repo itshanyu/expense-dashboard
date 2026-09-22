@@ -146,22 +146,92 @@ function drawMonthly(byMonth, months) {
   });
 }
 
-// ── 試算器 ──
+// ── 試算器：支出預估表版 ──
+const BUDGET_PRESET = [
+  { name: "房租", amount: null },
+  { name: "餐費", amount: null },
+  { name: "交通", amount: null },
+  { name: "訂閱", amount: null },
+];
+
 function setupEstimator(sum) {
   const $ = id => document.getElementById(id);
-  const inputs = ["in-ideal", "in-income", "in-inflation", "in-years"].map($);
+  const list = $("budget-list");
+  const items = [];  // { name, amount }
+
+  function addItem(item = { name: "", amount: null }) {
+    const idx = items.length;
+    items.push(item);
+
+    const row = document.createElement("div");
+    row.className = "budget-item";
+
+    const name = document.createElement("input");
+    name.className = "item-name";
+    name.placeholder = "項目名稱";
+    name.value = item.name || "";
+
+    const amount = document.createElement("input");
+    amount.className = "item-amount";
+    amount.type = "number";
+    amount.min = "0";
+    amount.step = "100";
+    amount.placeholder = "金額";
+    amount.value = item.amount ?? "";
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "del-btn";
+    del.textContent = "✕";
+    del.addEventListener("click", () => {
+      const i = items.indexOf(item);
+      if (i >= 0) items.splice(i, 1);
+      row.remove();
+      compute();
+    });
+
+    name.addEventListener("input", () => { item.name = name.value; compute(); });
+    amount.addEventListener("input", () => { item.amount = amount.value === "" ? null : Number(amount.value); compute(); });
+
+    row.append(name, amount, del);
+    list.appendChild(row);
+  }
+
+  // 預設項目（金額留空讓使用者填）
+  BUDGET_PRESET.forEach(p => addItem({ name: p.name, amount: null }));
+
+  $("add-item").addEventListener("click", () => addItem());
+
+  // 記憶：存 localStorage，下次打開自動帶入
+  const STORE_KEY = "budget-estimator-v1";
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (Array.isArray(saved) && saved.length) {
+      list.innerHTML = "";
+      items.length = 0;
+      saved.forEach(it => addItem(it));
+    }
+  } catch (e) { /* 忽略，用預設 */ }
+
+  function saveState() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(items)); } catch (e) {}
+  }
 
   function compute() {
-    const ideal0 = Number($("in-ideal").value) || 0;
+    const total0 = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
     const income = Number($("in-income").value) || 0;
     const inflation = (Number($("in-inflation").value) || 0) / 100;
     const years = Number($("in-years").value) || 0;
 
+    // 通膨調整：整份預算表一起放大
     const factor = Math.pow(1 + inflation, years);
-    const ideal = ideal0 * factor;
+    const ideal = total0 * factor;
     $("r-years-label").textContent = years > 0 ? `${years} 年後` : "今年";
+    $("budget-total").textContent = years > 0 && factor !== 1
+      ? `${fmt(total0)} → ${fmt(ideal)}` : fmt(total0);
 
     $("r-baseline").textContent = fmt(sum.baseline);
+    $("r-ideal").textContent = ideal > 0 ? fmt(ideal) : "—";
 
     let netMonthly = null;
     if (income > 0) {
@@ -193,19 +263,23 @@ function setupEstimator(sum) {
     if (ideal > 0 && netMonthly != null) {
       const gap = netMonthly - ideal;
       if (gap >= 0) {
-        verdict.textContent = `目前收入撐得起這個理想：每月約多 ${fmt(gap)} 可以存下來。`;
+        verdict.textContent = `目前收入撐得起這份預算：每月約多 ${fmt(gap)} 可以存下來。`;
         verdict.classList.add("good");
       } else {
-        verdict.textContent = `目前收入還差 ${fmt(-gap)}／月。要把理想生活過下去，稅前月收入要達到 ${fmt(needed)}。`;
+        verdict.textContent = `目前收入還差 ${fmt(-gap)}／月。要把這份預算過下去，稅前月收入要達到 ${fmt(needed)}。`;
         verdict.classList.add("warn");
       }
+    } else if (ideal > 0) {
+      verdict.textContent = `這份預算換算成稅前月收入需要 ${fmt(needed)}。填入收入可比對目前是否足夠。`;
     } else {
-      verdict.textContent = "填入理想支出與（或）收入，就能看到試算。";
+      verdict.textContent = "在左邊列出你的固定花費，就會自動算出需要賺多少。";
     }
+
+    saveState();
   }
 
-  inputs.forEach(el => el.addEventListener("input", compute));
-  if (sum.baseline > 0) $("in-ideal").placeholder = `例：${Math.round(sum.baseline / 1000) * 1000}`;
+  ["in-income", "in-inflation", "in-years"].forEach(id =>
+    $(id).addEventListener("input", compute));
   compute();
 }
 

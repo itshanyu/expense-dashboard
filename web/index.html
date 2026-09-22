@@ -63,12 +63,15 @@
       <p class="panel-desc">調整下面的數字，即時算出「要維持你想要的生活，實際上要賺多少」。稅務用台灣綜所稅級距粗算，不含扣除額。</p>
       <div class="estimator">
         <div class="inputs">
-          <label>理想月支出
-            <div class="input-row">
-              <span class="unit">$</span>
-              <input type="number" id="in-ideal" min="0" step="1000" placeholder="例如 25000">
-            </div>
-          </label>
+          <div class="input-head">
+            <span>支出預估表</span>
+            <button type="button" class="mini-btn" id="add-item">＋ 新增項目</button>
+          </div>
+          <div id="budget-list"></div>
+          <div class="result-row total-row">
+            <span class="r-label">合計月支出</span>
+            <span class="r-value" id="budget-total">$0</span>
+          </div>
           <label>預估月收入（稅前）
             <div class="input-row">
               <span class="unit">$</span>

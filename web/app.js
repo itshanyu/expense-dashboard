@@ -146,21 +146,11 @@ function drawMonthly(byMonth, months) {
   });
 }
 
-// ── 試算器：支出預估表版 ──
-const BUDGET_PRESET = [
-  { name: "房租", amount: null },
-  { name: "餐費", amount: null },
-  { name: "交通", amount: null },
-  { name: "訂閱", amount: null },
-];
-
-function setupEstimator(sum) {
-  const $ = id => document.getElementById(id);
-  const list = $("budget-list");
-  const items = [];  // { name, amount }
+// ── 可複用的「項目列表」（支出預估表與收入來源共用）──
+function makeList(listEl, storeKey, preset) {
+  const items = [];
 
   function addItem(item = { name: "", amount: null }) {
-    const idx = items.length;
     items.push(item);
 
     const row = document.createElement("div");
@@ -187,63 +177,104 @@ function setupEstimator(sum) {
       const i = items.indexOf(item);
       if (i >= 0) items.splice(i, 1);
       row.remove();
-      compute();
+      onChange();
     });
 
-    name.addEventListener("input", () => { item.name = name.value; compute(); });
-    amount.addEventListener("input", () => { item.amount = amount.value === "" ? null : Number(amount.value); compute(); });
+    name.addEventListener("input", () => { item.name = name.value; onChange(); });
+    amount.addEventListener("input", () => { item.amount = amount.value === "" ? null : Number(amount.value); onChange(); });
 
     row.append(name, amount, del);
-    list.appendChild(row);
+    listEl.appendChild(row);
   }
 
-  // 預設項目（金額留空讓使用者填）
-  BUDGET_PRESET.forEach(p => addItem({ name: p.name, amount: null }));
+  let onChange = () => {};
 
-  $("add-item").addEventListener("click", () => addItem());
-
-  // 記憶：存 localStorage，下次打開自動帶入
-  const STORE_KEY = "budget-estimator-v1";
+  // localStorage 還原（有的話），否則用預設
   try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    const saved = JSON.parse(localStorage.getItem(storeKey) || "null");
     if (Array.isArray(saved) && saved.length) {
-      list.innerHTML = "";
-      items.length = 0;
       saved.forEach(it => addItem(it));
+    } else {
+      preset.forEach(p => addItem({ name: p, amount: null }));
     }
-  } catch (e) { /* 忽略，用預設 */ }
-
-  function saveState() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(items)); } catch (e) {}
+  } catch (e) {
+    preset.forEach(p => addItem({ name: p, amount: null }));
   }
+
+  return {
+    addItem,
+    get total() { return items.reduce((s, it) => s + (Number(it.amount) || 0), 0); },
+    get items() { return items; },
+    setListener(fn) { onChange = fn; },
+    save() { try { localStorage.setItem(storeKey, JSON.stringify(items)); } catch (e) {} },
+  };
+}
+
+// ── 試算器 ──
+function setupEstimator(sum) {
+  const $ = id => document.getElementById(id);
+
+  const budget = makeList($("budget-list"), "budget-estimator-v1", ["房租", "餐費", "交通", "訂閱"]);
+  const income = makeList($("income-list"), "income-estimator-v1", ["本業", "副業"]);
+  $("add-item").addEventListener("click", () => budget.addItem());
+  $("add-income").addEventListener("click", () => income.addItem());
 
   function compute() {
-    const total0 = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
-    const income = Number($("in-income").value) || 0;
+    const total0 = budget.total;
+    const income0 = income.total;
+    const cash = Number($("in-cash").value) || 0;
+    const stock = Number($("in-stock").value) || 0;
     const inflation = (Number($("in-inflation").value) || 0) / 100;
     const years = Number($("in-years").value) || 0;
 
-    // 通膨調整：整份預算表一起放大
+    // 通膨調整：支出與收入都放大（收入假設不隨通膨自動漲，比較保守）
     const factor = Math.pow(1 + inflation, years);
     const ideal = total0 * factor;
     $("r-years-label").textContent = years > 0 ? `${years} 年後` : "今年";
     $("budget-total").textContent = years > 0 && factor !== 1
       ? `${fmt(total0)} → ${fmt(ideal)}` : fmt(total0);
+    $("income-total").textContent = fmt(income0);
 
     $("r-baseline").textContent = fmt(sum.baseline);
     $("r-ideal").textContent = ideal > 0 ? fmt(ideal) : "—";
 
+    // 收入稅後（多來源合計，一起套級距）
     let netMonthly = null;
-    if (income > 0) {
-      const tax = taxAnnual(income * 12);
-      netMonthly = (income * 12 - tax) / 12;
-      $("r-tax").textContent = `年稅額約 ${fmt(tax)}（稅後年收入 ${fmt(income * 12 - tax)}）`;
+    if (income0 > 0) {
+      const tax = taxAnnual(income0 * 12);
+      netMonthly = (income0 * 12 - tax) / 12;
+      $("r-tax").textContent = `年收入 ${fmt(income0 * 12)} → 年稅額約 ${fmt(tax)}`;
       $("r-net").textContent = fmt(netMonthly);
     } else {
       $("r-tax").textContent = "—";
       $("r-net").textContent = "—";
     }
 
+    // 每月結餘
+    let surplus = null;
+    if (netMonthly != null) {
+      surplus = netMonthly - ideal;
+      $("r-surplus").textContent = (surplus >= 0 ? "+" : "−") + fmt(Math.abs(surplus)).slice(0);
+      $("r-surplus").style.color = surplus >= 0 ? "#4d8b6a" : "#c0392b";
+    } else {
+      $("r-surplus").textContent = "—";
+    }
+
+    // 資產跑道：總資產 / 每月支出（股票視為可變現，標註假設）
+    const assets = cash + stock;
+    let runwayMonths = null;
+    if (assets > 0 && ideal > 0) {
+      runwayMonths = assets / ideal;
+      const y = Math.floor(runwayMonths / 12);
+      const m = Math.round(runwayMonths % 12);
+      $("r-runway").textContent = y > 0 ? `${y} 年 ${m} 個月` : `${Math.round(runwayMonths * 10) / 10} 個月`;
+    } else if (assets > 0 && ideal === 0) {
+      $("r-runway").textContent = "填預算才知道";
+    } else {
+      $("r-runway").textContent = "—";
+    }
+
+    // 維持預算所需的稅前月收入（二分反推）
     let needed = null;
     if (ideal > 0) {
       let lo = 0, hi = ideal * 4 + 1000000;
@@ -258,27 +289,36 @@ function setupEstimator(sum) {
       $("r-needed").textContent = "—";
     }
 
+    // 判定
     const verdict = $("r-verdict");
     verdict.className = "verdict";
-    if (ideal > 0 && netMonthly != null) {
-      const gap = netMonthly - ideal;
+    const hasAssets = assets > 0;
+    if (ideal > 0 && netMonthly != null && hasAssets) {
+      const gap = surplus;
       if (gap >= 0) {
-        verdict.textContent = `目前收入撐得起這份預算：每月約多 ${fmt(gap)} 可以存下來。`;
+        const growMonths = gap > 0 ? assets / gap : Infinity;
+        verdict.textContent = `收入撐得起這份預算：每月多 ${fmt(gap)}，加上資產 ${fmt(assets)}，就算明天斷收入也有 ${$("r-runway").textContent} 跑道。`;
         verdict.classList.add("good");
       } else {
-        verdict.textContent = `目前收入還差 ${fmt(-gap)}／月。要把這份預算過下去，稅前月收入要達到 ${fmt(needed)}。`;
+        const cover = runwayMonths != null ? runwayMonths.toFixed(1) : "?";
+        verdict.textContent = `每月缺口 ${fmt(-gap)}，目前靠資產可撐約 ${cover} 個月。要轉正，稅前月收入需 ${fmt(needed)}，或把預算壓到 ${fmt(netMonthly)} 以下。`;
         verdict.classList.add("warn");
       }
+    } else if (ideal > 0 && hasAssets) {
+      verdict.textContent = `資產 ${fmt(assets)} 只靠它可以活 ${$("r-runway").textContent}。填入收入來源可比對缺口。`;
     } else if (ideal > 0) {
-      verdict.textContent = `這份預算換算成稅前月收入需要 ${fmt(needed)}。填入收入可比對目前是否足夠。`;
+      verdict.textContent = `這份預算換算成稅前月收入需要 ${fmt(needed)}。`;
     } else {
-      verdict.textContent = "在左邊列出你的固定花費，就會自動算出需要賺多少。";
+      verdict.textContent = "列出固定花費，就會算出需要賺多少、資產能撐多久。";
     }
 
-    saveState();
+    budget.save();
+    income.save();
   }
 
-  ["in-income", "in-inflation", "in-years"].forEach(id =>
+  budget.setListener(compute);
+  income.setListener(compute);
+  ["in-cash", "in-stock", "in-inflation", "in-years"].forEach(id =>
     $(id).addEventListener("input", compute));
   compute();
 }

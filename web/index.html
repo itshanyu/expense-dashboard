@@ -64,20 +64,43 @@
       <div class="estimator">
         <div class="inputs">
           <div class="input-head">
-            <span>支出預估表</span>
-            <button type="button" class="mini-btn" id="add-item">＋ 新增項目</button>
+            <span>① 支出預估表（每月）</span>
+            <button type="button" class="mini-btn" id="add-item">＋ 新增</button>
           </div>
           <div id="budget-list"></div>
           <div class="result-row total-row">
             <span class="r-label">合計月支出</span>
             <span class="r-value" id="budget-total">$0</span>
           </div>
-          <label>預估月收入（稅前）
+
+          <div class="input-head block-gap">
+            <span>② 月收入來源（稅前）</span>
+            <button type="button" class="mini-btn" id="add-income">＋ 新增</button>
+          </div>
+          <div id="income-list"></div>
+          <div class="result-row total-row">
+            <span class="r-label">合計月收入</span>
+            <span class="r-value" id="income-total">$0</span>
+          </div>
+
+          <div class="input-head block-gap">
+            <span>③ 資產現況</span>
+          </div>
+          <label>可動用資金（現金/存款）
             <div class="input-row">
               <span class="unit">$</span>
-              <input type="number" id="in-income" min="0" step="1000" placeholder="例如 45000">
+              <input type="number" id="in-cash" min="0" step="1000" placeholder="例如 150000">
             </div>
           </label>
+          <label>股票庫存（目前市值）
+            <div class="input-row">
+              <span class="unit">$</span>
+              <input type="number" id="in-stock" min="0" step="1000" placeholder="例如 300000">
+            </div>
+          </label>
+        </div>
+
+        <div class="side-inputs">
           <label>通膨年增率
             <div class="input-row">
               <input type="number" id="in-inflation" min="0" max="20" step="0.5" value="2">
@@ -90,26 +113,39 @@
               <span class="unit-r">年</span>
             </div>
           </label>
+          <div class="hint-box">
+            ① 加總你的固定花費 → ② 列出收入來源 → ③ 填資產。
+            右邊即時算出「資產可以活幾個月」和「要維持這份預算需要賺多少」。
+          </div>
         </div>
+
         <div class="results" id="estimator-results">
           <div class="result-row">
             <span class="r-label">現況基準（實際月均）</span>
             <span class="r-value" id="r-baseline">—</span>
           </div>
           <div class="result-row">
-            <span class="r-label">理想支出（<span id="r-years-label">今年</span>）</span>
+            <span class="r-label">預算合計（<span id="r-years-label">今年</span>）</span>
             <span class="r-value" id="r-ideal">—</span>
           </div>
           <div class="result-row">
-            <span class="r-label">收入稅後月可支配</span>
+            <span class="r-label">收入合計（稅後月）</span>
             <span class="r-value" id="r-net">—</span>
+          </div>
+          <div class="result-row">
+            <span class="r-label">每月結餘（收入 − 預算）</span>
+            <span class="r-value" id="r-surplus">—</span>
+          </div>
+          <div class="result-row">
+            <span class="r-label">🛟 資產跑道（只靠資產可活）</span>
+            <span class="r-value big" id="r-runway">—</span>
           </div>
           <div class="result-row">
             <span class="r-label">稅務試算（年收入 × 級距粗算）</span>
             <span class="r-value small" id="r-tax">—</span>
           </div>
           <div class="result-row highlight">
-            <span class="r-label">要過理想生活，稅前月收入需</span>
+            <span class="r-label">維持預算，稅前月收入需</span>
             <span class="r-value big" id="r-needed">—</span>
           </div>
           <div class="verdict" id="r-verdict"></div>

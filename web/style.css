@@ -69,6 +69,13 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
 .empty-hint { text-align: center; color: var(--ink-soft); padding: 40px 0; }
 
 /* ═══ 試算器 ═══ */
+.block-gap { margin-top: 14px; }
+.side-inputs { display: flex; flex-direction: column; gap: 16px; }
+.hint-box {
+  font-size: 0.8rem; color: var(--ink-soft); line-height: 1.7;
+  background: var(--bg-top); border-radius: 12px; padding: 12px 14px;
+}
+
 .input-head {
   display: flex; justify-content: space-between; align-items: center;
   font-size: 0.85rem; color: var(--ink-soft); font-weight: 600;

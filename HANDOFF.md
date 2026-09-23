@@ -1,76 +1,94 @@
 # 交接筆記 — 個人記帳系統
 
-**最後更新：** 2026-09-22（Hermes 接手後已查證並定案，本文件為唯一事實來源）
-**狀態：** ✅ 技術路線已定案，spec 與 plan 已同步更新，可直接依照 plan 執行開發。
+**最後更新：** 2026-09-23（Phase A 全上線＋Phase B 視覺化已部署，本文件為唯一事實來源）
+**狀態：** ✅ 系統已上線運作中。剩餘：使用者對葛斯記帳做最終端到端驗收。
 
 ---
 
 ## 0. 一句話結論（先讀這個）
 
-**葛斯（Gus）是真實存在且正在運行的系統**——它是 Hermes Agent 的獨立 profile（`~/.hermes/profiles/gus/`），由 launchd 服務 `ai.hermes.gateway-gus` 常駐執行，Discord gateway 狀態為 connected。記帳系統的路線是「**擴充葛斯**」：在葛斯的 Discord 設定中加入記帳討論串的 free-response 監聽，配一個記帳 skill + Google Sheets 寫入腳本。分類方式採用 **AI 判斷**（葛斯本身就是 LLM，分類不需要額外 API 呼叫，零新增成本）。
+**葛斯（Gus）是真實存在且正在運行的系統**——Hermes Agent 的獨立 profile（`~/.hermes/profiles/gus/`），launchd 服務 `ai.hermes.gateway-gus` 常駐，Discord gateway connected。記帳系統已建完成並部署：
+
+- **輸入端（Phase A）**：使用者在 Discord 記帳討論串（thread `1551881517838635018`）打「金額 備註」（例：`400 午餐`）→ 葛斯 AI 分類 → 寫入 Google Sheets。
+- **輸出端（Phase B）**：公開儀表板 https://itshanyu.github.io/expense-dashboard/ —— 圖表＋支出/收入/夢想/資產試算器。GitHub Actions 每日同步資料快照。
 
 ---
 
-## 1. 舊版 HANDOFF 的「未解決關鍵問題」— 已於 2026-09-22 查證解決
+## 1. 系統架構（現況，全部已驗證運作）
 
-前一個 agent 發現 `/Users/apple/isis/Gus-bot/` 只有 README 沒有程式碼，因而卡在「葛斯是否存在」。查證結果：
+```
+Discord 記帳討論串 (1551881517838635018)
+   ↓ 葛斯 gateway（free_response_channels 已加入此串）
+葛斯 skill「記帳」（~/.hermes/profiles/gus/skills/記帳/SKILL.md）
+   解析「數字開頭」訊息 → AI 分類（11 分類）→ 呼叫腳本
+   ↓
+scripts/append_expense.py → Google Sheets「記帳」（Expenses 工作表）
+   ↓ GitHub Actions 每天 05:40 台北時間（export-snapshot.yml）
+scripts/export_snapshot.py → web/data.json（摘要版：只有統計，無明細無備註）
+   ↓ GitHub Actions push 觸發（deploy-pages.yml）
+GitHub Pages → https://itshanyu.github.io/expense-dashboard/
+```
 
-| 查證項目 | 結果 |
+## 2. 隱私架構（使用者明確選擇的方案 3）
+
+Sheets 試算表維持**完全私有**。網頁讀的 `data.json` 是**摘要版**：只有月總額、月×分類、日總額三種統計，**不含**單筆明細、備註、RecordedAt。`export_snapshot.py` 預設輸出摘要版；`--full` 旗標才會輸出明細（僅限本機，嚴禁推上公開 repo）。試算器使用者的預算/收入/夢想/資產輸入全存瀏覽器 localStorage，不上傳。
+
+## 3. 已確認的決定（含演進）
+
+- 分類 11 個：餐食、飲料、交通、旅遊、娛樂、購物、學習、醫療、保險、稅務、其他
+- 分類方式：AI 判斷（葛斯 agent 推理，零新增費用；使用者每週校正一次）
+- 非數字開頭訊息：完全忽略
+- 反饋：gateway 原生 reactions（👀/✅/❌）
+- 不做：編輯/刪除指令（直接改 Sheets）、密碼保護、收入記錄（Discord 端）
+- 前端部署：GitHub Pages，repo 公開（`itshanyu/expense-dashboard`），使用者知情並選擇「摘要版快照」方案
+
+## 4. 視覺化網頁功能（全部已部署）
+
+1. 概況卡片：本月支出、日均、月底預估、歷史月均
+2. 圖表：本月分類佔比（甜甜圈）、近 30 天趨勢、每月總支出長條
+3. 試算區（左支出／右收入平行雙欄，下方資產列，紫色夢想清單，結果分三組）：
+   - **支出預估表**：逐項固定花費（預設房租/餐費/交通/訂閱，可增刪）
+   - **收入規劃**：逐項收入來源（預設本業/副業），合計套台灣綜所稅五級距算稅後（級距速算不含扣除額）
+   - **夢想清單**：一次性目標（總價＋幾年後＋夢想專屬收入），通膨調整後攤提「每月還需存」；夢想收入先扣稅再抵扣
+   - **資產現況與假設**：可動用資金、股票市值、通膨率（預設 2%）、看幾年後
+   - **結果分三組**：🏦資產（總資產卡＋資產跑道卡）、🔄每月現金流（支出/收入/結餘/夢想需存/扣夢想後結餘，每項附白話小字）、結論（維持這種生活所需稅前月收入＋總結判定）
+   - 二分法反推稅前所需收入（級距稅無法直接反解）
+   - 所有試算輸入存 localStorage（key：`budget-estimator-v1`、`income-estimator-v1`、`dream-estimator-v1`）
+
+## 5. 檔案地圖
+
+| 檔案 | 內容 |
 |---|---|
-| `/Users/apple/isis/Gus-bot/` | 只是歷史規劃文件（README + 一張圖），與現行系統無關。舊 `yt_discord_bot.py` 已刪除 |
-| 葛斯本體 | Hermes Agent profile，位於 `~/.hermes/profiles/gus/` |
-| 常駐方式 | launchd 服務 `ai.hermes.gateway-gus`（plist 在 `~/Library/LaunchAgents/`），重啟：`launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-gus` |
-| Discord 連線 | gateway_state.json 顯示 `platforms/discord/state = connected` |
-| 模型 | GLM / Z.AI（`auth.json` base_url `api.z.ai`；Hann 男友的 coding-plan key，已同意使用） |
-| Discord 權限 | `.env` 設 `DISCORD_ALLOWED_USERS=726789604459544599`（Hann 本人）；`config.yaml` 已有 `discord.free_response_channels: '956840925689155614'`，加入新討論串 ID 即可讓葛斯免 @mention 回應 |
-| 表情反饋 | Hermes gateway 原生支援 `DISCORD_REACTIONS`（預設開啟）：處理中 👀、成功 ✅、失敗 ❌——與 spec 的反應機制需求天然吻合，不需自己實作 |
+| `HANDOFF.md`（本檔） | 唯一事實來源 |
+| `docs/superpowers/specs/`、`docs/superpowers/plans/` | spec 與 plan（已同步定案版＋Phase B 進度註記） |
+| `scripts/append_expense.py` | Sheets 寫入（葛斯呼叫），12 個單元測試全過 |
+| `scripts/test_append_expense.py` | 測試（`venv/bin/python scripts/test_append_expense.py`） |
+| `scripts/export_snapshot.py` | 快照匯出（預設摘要版、`--full` 明細版） |
+| `skills/記帳/SKILL.md` | 葛斯記帳 skill 源碼（已安裝至 gus profile） |
+| `web/` | 儀表板（index.html / app.js / style.css / data.json） |
+| `.github/workflows/export-snapshot.yml` | 每日 05:40 台北同步快照 |
+| `.github/workflows/deploy-pages.yml` | push 自動部署 Pages |
+| `secrets/`（.gitignore） | service account JSON：`personal-bookkeeping-509409-b0f8d5717626.json` |
+| GitHub repo | `itshanyu/expense-dashboard`（公開）；Actions secrets：`SERVICE_ACCOUNT_JSON`、`EXPENSE_SHEET_ID` |
 
-**重要更正：** 舊版 HANDOFF 說葛斯有「GEMINI_API_KEY 可重用」——已過時。葛斯現在走 GLM/Z.AI，沒有 Gemini key。但這反而讓分類決策變簡單：葛斯本身就是 LLM agent，訊息進來時分類是 agent 推理的一部分，**沒有逐次計費問題**，所以使用者原初偏好的「AI 判斷分類」直接採用，不需要關鍵字比對。
+## 6. 環境與 credentials 位置
 
----
+- Sheet ID：`1P-8PRqwW2QmSqT9Y9NzfEZA-r6wsSB_Jh8fOs10gx14`（試算表「記帳」，工作表 `Expenses`）
+- 葛斯 `.env`（`~/.hermes/profiles/gus/.env`）：DISCORD_BOT_TOKEN、DISCORD_ALLOWED_USERS、GOOGLE_APPLICATION_CREDENTIALS、EXPENSE_SHEET_ID（後兩項 2026-09-22 加入）
+- 葛斯 `config.yaml`：`discord.free_response_channels: 956840925689155614,1551881517838635018`（後者為記帳串，2026-09-22 加入）
+- 本機 venv：`記帳系統/venv/`（Python 3.11，google-api-python-client + google-auth）
 
-## 2. 最終技術決定（覆蓋所有舊版文件中的「方案 A/B」討論）
+## 7. 剩餘待辦
 
-1. **技術路線：方案 B（擴充葛斯）。** Hermes gateway 本來就是常駐 Discord 連線，直接監聽討論串訊息即時處理。方案 A（Vercel Cron 輪詢）與「從零寫 Python discord.py bot」皆淘汰，不再考慮。
-2. **輸入方式：** 使用者在固定討論串（thread ID `1551881517838635018`）打純文字訊息「金額 備註」，例如 `400 午餐`。第一個數字當金額，其餘文字當備註。不是數字開頭的訊息：葛斯不回應、不記帳。
-3. **分類：AI 判斷**，由葛斯在收到訊息時直接判斷（這是 agent 推理，不是額外 API 呼叫）。分類清單共 11 個（注意：舊 HANDOFF 寫「10 個」是筆誤，實列 11 項，以清單為準）：
-   **餐食、飲料、交通、旅遊、娛樂、購物、學習、醫療、保險、稅務、其他**
-4. **反饋機制：** 沿用 Hermes gateway 原生 reactions（✅ 成功 / ❌ 失敗），不自製。已知副作用：被忽略的非記帳訊息也會出現 👀/✅，屬可接受的外觀問題。
-5. **資料儲存：Google Sheets**（service account 寫入；前端用唯讀 API key 讀取）。欄位：`Date | Amount | Category | Note | RecordedAt`。
-6. **不做的事：** 編輯/刪除指令（直接改 Sheets）、密碼保護、收入記錄、資料匯入。
-7. **分階段交付：**
-   - 第一階段：Discord 輸入 → Sheets 管線（`docs/superpowers/plans/` 內的 plan，Phase A）
-   - 第二階段：GitHub Pages 視覺化 + 財務目標估算器（同 plan 的 Phase B，等有真實資料後執行 UI 細節）
+- [ ] **端到端驗收**：使用者在記帳討論串實際打 `400 午餐`，確認葛斯回 ✅、Sheets 多一列、隔天網頁反映。遲未驗證——唯一未走完的步驟
+- [ ] Sheets 裡有一筆測試資料（2026-09-22 金額 1「系統測試」），驗收後由使用者在 Sheets 手動刪除
+- [ ] 使用者截圖回報：夢想清單曾出現「每月需存 $220,000」的異常值，疑似單位/年數填錯，待使用者確認（已透過欄位說明改善）
+- [ ] Phase B 可再延伸（使用者提出才做）：股票打折扣算跑道、本機 --full 明細列表頁
 
----
+## 8. 執行注意事項（給接手的 agent）
 
-## 3. 已確認的需求背景（來自 /grill-me 訪談，仍有效）
-
-- 動機：(1) 自我覺察支出流向、(2) 每月預算控管、(3) 累積現金流數據餵理財決策
-- 純個人記帳，不含家庭/共同帳戶；第一階段只記支出
-- 沒有既有資料，全部手動輸入
-- 使用者每週開 Sheets 校正一次分類，不要求 AI 分類完全正確
-- 財務目標估算：實際支出算「現況基準」vs 使用者手動設「理想情境」，兩者對比
-- 稅務試算：台灣綜所稅級距速算（不含扣除額細節）；通膨假設固定可調，預設 2%
-- 使用者 GitHub 帳號 `itshanyu`（gh 已登入）；只用過 GitHub Pages（sleep-dashboard），沒用過 Vercel → 前端走 GitHub Pages
-
----
-
-## 4. 檔案地圖
-
-| 檔案 | 狀態 |
-|---|---|
-| `HANDOFF.md`（本檔） | ✅ 已更新為定案版 |
-| `docs/superpowers/specs/2026-09-22-personal-finance-tracker.md` | ✅ 已重寫，反映中途變更與最終決定 |
-| `docs/superpowers/plans/2026-09-22-discord-expense-recording.md` | ✅ 已重寫（舊 Vercel/TypeScript plan 已由葛斯路線取代） |
-| 專案資料夾 | `/Users/apple/isis/wiki/投資理財/記帳系統/`，尚未 `git init`（plan 的 Task 1 會做） |
-
----
-
-## 5. 執行時的環境注意事項（給任何接手的 agent）
-
-- 葛斯的 config 修改一律用 `hermes config set ... --profile gus`，不要手改 `config.yaml`。
-- 改完葛斯設定後需重啟 gateway：`launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-gus`。
-- 葛斯 profile 的 secrets 在 `~/.hermes/profiles/gus/.env`（現有 DISCORD_BOT_TOKEN、DISCORD_ALLOWED_USERS 兩項）。
-- Google Sheets service account 的金鑰 JSON 放 `記帳系統/secrets/`（加入 .gitignore），路徑用環境變數 `GOOGLE_APPLICATION_CREDENTIALS` 指定。
-- 驗收方式：使用者在記帳討論串打 `400 午餐`，葛斯應出現 ✅ 且 Sheets 多一列；打非數字開頭訊息，葛斯不應回應。
+- 葛斯設定一律 `hermes config set ... --profile gus`，不手改 config.yaml；改完重啟 `launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-gus`，並讀 `gateway_state.json` 確認 discord connected。
+- 改 web 後 `node --check app.js`、驗證 index.html 的 id 完整性，push 後等 `deploy-pages.yml` 跑完（約 20-30 秒）再驗收線上版。
+- push 若被拒（remote 有 Actions 的快照 commit），先 `git pull --rebase origin main` 再推（發生過兩次）。
+- 驗收線上 data.json 是否更新時注意 CDN 快取，加 `?t=<timestamp>` 或比對 `generatedAt` 欄位。
+- 本機預覽：`cd web && python3 -m http.server 8934`（瀏覽器自動化截圖曾被 Chrome 遠端除錯授權彈窗擋住，用 curl + node 驗證替代）。

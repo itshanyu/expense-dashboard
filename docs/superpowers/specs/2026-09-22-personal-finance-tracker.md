@@ -73,8 +73,7 @@
 ## 分階段交付
 
 1. **第一階段（本次）：Discord → 葛斯 → Google Sheets 記帳管線。** 對應 plan：`docs/superpowers/plans/2026-09-22-discord-expense-recording.md` 的 Phase A。
-2. **第二階段：GitHub Pages 視覺化 + 財務目標估算器。** 對應同 plan 的 Phase B。
-   **（2026-09-22 已動工並完成本機版）**：`web/` 內含儀表板（本月支出/日均/月底預估/月均四卡片、分類佔比、30 天趨勢、每月長條）＋「預估與收入試算器」（理想支出 × 收入 × 通膨 × 年數，台灣綜所稅級距粗算，反推所需稅前月收入）。資料走快照架構：`scripts/export_snapshot.py` 用 service account 把 Sheets 匯出成 `web/data.json`，網頁只讀快照，試算表維持私有、不放金鑰。GitHub Actions（`.github/workflows/export-snapshot.yml`）每天自動同步。剩餘：建 GitHub repo + Pages 部署（Task 8）。
+2. **第二階段：視覺化網頁（2026-09-23 已上線）。** https://itshanyu.github.io/expense-dashboard/ —— 功能細節與架構見 `HANDOFF.md`（唯一事實來源）。要點：資料走隱私摘要快照（`data.json` 無明細無備註，Sheets 維持私有）；儀表板含圖表＋試算區（支出預估表／收入規劃平行雙欄、夢想清單攤提、資產跑道、台灣綜所稅級距速算、二分法反推所需稅前收入）；試算輸入存瀏覽器 localStorage 不上傳。剩餘：使用者端到端驗收葛斯記帳。
 
 ## 使用者需要另外完成的設定（一次性，Claude 會引導）
 

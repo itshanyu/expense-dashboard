@@ -68,13 +68,30 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
 .chart-box.tall { height: 300px; }
 .empty-hint { text-align: center; color: var(--ink-soft); padding: 40px 0; }
 
-/* ═══ 試算器 ═══ */
-.block-gap { margin-top: 14px; }
-.side-inputs { display: flex; flex-direction: column; gap: 16px; }
-.hint-box {
-  font-size: 0.8rem; color: var(--ink-soft); line-height: 1.7;
-  background: var(--bg-top); border-radius: 12px; padding: 12px 14px;
+/* ═══ 試算器：支出╱收入平行雙欄 + 下方資產列 ═══ */
+.planner {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
 }
+@media (max-width: 760px) { .planner { grid-template-columns: 1fr; } }
+
+.col { display: flex; flex-direction: column; gap: 10px; }
+.col-title {
+  font-size: 0.95rem; font-weight: 700;
+  padding: 8px 14px; border-radius: 10px;
+}
+.col-title.out { background: linear-gradient(120deg, #fbe3ea, #f7cfdb); color: var(--rose-dark); }
+.col-title.in  { background: linear-gradient(120deg, #e3ecf7, #d3e2f3); color: #3d5a80; }
+.col-title.asset { background: var(--bg-top); color: var(--ink-soft); }
+.col-sub { font-size: 0.78rem; color: var(--ink-soft); font-weight: 500; }
+
+.bottom-zone { margin-top: 22px; }
+.bottom-inputs { margin-bottom: 16px; }
+.asset-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-top: 10px;
+}
+.asset-grid label { font-size: 0.82rem; color: var(--ink-soft); font-weight: 600; }
+.asset-grid .input-row { margin-top: 5px; }
 
 .input-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -111,10 +128,7 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
 .budget-item input::placeholder { color: var(--ink-soft); opacity: 0.55; font-weight: 400; }
 .total-row { background: linear-gradient(120deg, #fdf0f3, #fbe3ea); }
 
-.estimator { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-@media (max-width: 760px) { .estimator { grid-template-columns: 1fr; } }
-
-.inputs { display: flex; flex-direction: column; gap: 16px; }
+.results { display: flex; flex-direction: column; gap: 10px; }
 .inputs label { font-size: 0.85rem; color: var(--ink-soft); font-weight: 600; }
 .input-row {
   display: flex; align-items: center; gap: 8px; margin-top: 6px;

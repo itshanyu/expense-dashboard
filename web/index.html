@@ -61,10 +61,12 @@
     <section class="panel">
       <h2>💰 預估與收入試算</h2>
       <p class="panel-desc">調整下面的數字，即時算出「要維持你想要的生活，實際上要賺多少」。稅務用台灣綜所稅級距粗算，不含扣除額。</p>
-      <div class="estimator">
-        <div class="inputs">
+      <div class="planner">
+        <!-- 左：支出 -->
+        <div class="col">
+          <div class="col-title out">支出預估（每月）</div>
           <div class="input-head">
-            <span>① 支出預估表（每月）</span>
+            <span class="col-sub">固定花費逐項列出</span>
             <button type="button" class="mini-btn" id="add-item">＋ 新增</button>
           </div>
           <div id="budget-list"></div>
@@ -72,9 +74,13 @@
             <span class="r-label">合計月支出</span>
             <span class="r-value" id="budget-total">$0</span>
           </div>
+        </div>
 
-          <div class="input-head block-gap">
-            <span>② 月收入來源（稅前）</span>
+        <!-- 右：收入 -->
+        <div class="col">
+          <div class="col-title in">收入規劃（稅前／每月）</div>
+          <div class="input-head">
+            <span class="col-sub">收入來源逐項列出</span>
             <button type="button" class="mini-btn" id="add-income">＋ 新增</button>
           </div>
           <div id="income-list"></div>
@@ -82,40 +88,38 @@
             <span class="r-label">合計月收入</span>
             <span class="r-value" id="income-total">$0</span>
           </div>
-
-          <div class="input-head block-gap">
-            <span>③ 資產現況</span>
-          </div>
-          <label>可動用資金（現金/存款）
-            <div class="input-row">
-              <span class="unit">$</span>
-              <input type="number" id="in-cash" min="0" step="1000" placeholder="例如 150000">
-            </div>
-          </label>
-          <label>股票庫存（目前市值）
-            <div class="input-row">
-              <span class="unit">$</span>
-              <input type="number" id="in-stock" min="0" step="1000" placeholder="例如 300000">
-            </div>
-          </label>
         </div>
+      </div>
 
-        <div class="side-inputs">
-          <label>通膨年增率
-            <div class="input-row">
-              <input type="number" id="in-inflation" min="0" max="20" step="0.5" value="2">
-              <span class="unit-r">%</span>
-            </div>
-          </label>
-          <label>看幾年後
-            <div class="input-row">
-              <input type="number" id="in-years" min="0" max="40" step="1" value="0">
-              <span class="unit-r">年</span>
-            </div>
-          </label>
-          <div class="hint-box">
-            ① 加總你的固定花費 → ② 列出收入來源 → ③ 填資產。
-            右邊即時算出「資產可以活幾個月」和「要維持這份預算需要賺多少」。
+      <!-- 下方：資產與假設 + 結果 -->
+      <div class="bottom-zone">
+        <div class="bottom-inputs">
+          <div class="col-title asset">資產現況與假設</div>
+          <div class="asset-grid">
+            <label>可動用資金（現金/存款）
+              <div class="input-row">
+                <span class="unit">$</span>
+                <input type="number" id="in-cash" min="0" step="1000" placeholder="例如 150000">
+              </div>
+            </label>
+            <label>股票庫存（目前市值）
+              <div class="input-row">
+                <span class="unit">$</span>
+                <input type="number" id="in-stock" min="0" step="1000" placeholder="例如 300000">
+              </div>
+            </label>
+            <label>通膨年增率
+              <div class="input-row">
+                <input type="number" id="in-inflation" min="0" max="20" step="0.5" value="2">
+                <span class="unit-r">%</span>
+              </div>
+            </label>
+            <label>看幾年後
+              <div class="input-row">
+                <input type="number" id="in-years" min="0" max="40" step="1" value="0">
+                <span class="unit-r">年</span>
+              </div>
+            </label>
           </div>
         </div>
 

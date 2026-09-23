@@ -141,43 +141,56 @@
         </div>
 
         <div class="results" id="estimator-results">
-          <div class="result-row">
-            <span class="r-label">現況基準（實際月均）</span>
-            <span class="r-value" id="r-baseline">—</span>
+          <!-- A. 資產 -->
+          <div class="r-group">
+            <div class="r-group-title">🏦 資產現況</div>
+            <div class="asset-cards">
+              <div class="asset-card">
+                <div class="a-label">總資產</div>
+                <div class="a-value" id="r-assets">—</div>
+                <div class="a-sub">可動用資金 ＋ 股票市值</div>
+              </div>
+              <div class="asset-card accent">
+                <div class="a-label">資產跑道</div>
+                <div class="a-value" id="r-runway">—</div>
+                <div class="a-sub">沒有任何收入，只靠這些資產<br>依照下面的每月預算，可以活這麼久</div>
+              </div>
+            </div>
           </div>
-          <div class="result-row">
-            <span class="r-label">預算合計（<span id="r-years-label">今年</span>）</span>
-            <span class="r-value" id="r-ideal">—</span>
+
+          <!-- B. 每月現金流 -->
+          <div class="r-group">
+            <div class="r-group-title">🔄 每月現金流</div>
+            <div class="result-row">
+              <span class="r-label">每月支出（預算合計<span id="r-years-label">，今年</span>）</span>
+              <span class="r-value" id="r-ideal">—</span>
+            </div>
+            <div class="result-row">
+              <span class="r-label">每月收入（右欄合計，已扣稅）<small id="r-tax"></small></span>
+              <span class="r-value" id="r-net">—</span>
+            </div>
+            <div class="result-row">
+              <span class="r-label">每月結餘（收入 − 支出）<small>正數＝有剩，負數＝透支</small></span>
+              <span class="r-value" id="r-surplus">—</span>
+            </div>
+            <div class="result-row">
+              <span class="r-label">夢想每月需存<small>上方夢想清單的攤提合計</small></span>
+              <span class="r-value" id="r-dream">—</span>
+            </div>
+            <div class="result-row">
+              <span class="r-label">扣掉夢想後結餘<small>結餘再減去夢想儲蓄，最後剩下多少</small></span>
+              <span class="r-value" id="r-after-dream">—</span>
+            </div>
           </div>
-          <div class="result-row">
-            <span class="r-label">收入合計（稅後月）</span>
-            <span class="r-value" id="r-net">—</span>
+
+          <!-- C. 結論 -->
+          <div class="r-group">
+            <div class="result-row highlight">
+              <span class="r-label">要過上面這種生活（支出＋夢想）<br>稅前月收入需要</span>
+              <span class="r-value big" id="r-needed">—</span>
+            </div>
+            <div class="verdict" id="r-verdict"></div>
           </div>
-          <div class="result-row">
-            <span class="r-label">每月結餘（收入 − 預算）</span>
-            <span class="r-value" id="r-surplus">—</span>
-          </div>
-          <div class="result-row">
-            <span class="r-label">🛟 資產跑道（只靠資產可活）</span>
-            <span class="r-value big" id="r-runway">—</span>
-          </div>
-          <div class="result-row">
-            <span class="r-label">夢想儲蓄（每月需為夢想存）</span>
-            <span class="r-value" id="r-dream">—</span>
-          </div>
-          <div class="result-row">
-            <span class="r-label">扣掉夢想後結餘</span>
-            <span class="r-value" id="r-after-dream">—</span>
-          </div>
-          <div class="result-row">
-            <span class="r-label">稅務試算（年收入 × 級距粗算）</span>
-            <span class="r-value small" id="r-tax">—</span>
-          </div>
-          <div class="result-row highlight">
-            <span class="r-label">維持預算，稅前月收入需</span>
-            <span class="r-value big" id="r-needed">—</span>
-          </div>
-          <div class="verdict" id="r-verdict"></div>
         </div>
       </div>
     </section>

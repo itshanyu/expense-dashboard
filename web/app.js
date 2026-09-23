@@ -330,20 +330,24 @@ function setupEstimator(sum) {
       ? `${fmt(total0)} → ${fmt(ideal)}` : fmt(total0);
     $("income-total").textContent = fmt(income0);
 
-    $("r-baseline").textContent = fmt(sum.baseline);
-    $("r-ideal").textContent = ideal > 0 ? fmt(ideal) : "—";
+    // A. 資產卡片
+    const assetsNow = (Number($("in-cash").value) || 0) + (Number($("in-stock").value) || 0);
+    $("r-assets").textContent = assetsNow > 0 ? fmt(assetsNow) : "—";
 
     // 收入稅後（多來源合計，一起套級距）
     let netMonthly = null;
     if (income0 > 0) {
       const tax = taxAnnual(income0 * 12);
       netMonthly = (income0 * 12 - tax) / 12;
-      $("r-tax").textContent = `年收入 ${fmt(income0 * 12)} → 年稅額約 ${fmt(tax)}`;
+      $("r-tax").textContent = `（年收入 ${fmt(income0 * 12)}，稅 ${fmt(tax)}）`;
       $("r-net").textContent = fmt(netMonthly);
     } else {
-      $("r-tax").textContent = "—";
+      $("r-tax").textContent = "";
       $("r-net").textContent = "—";
     }
+
+    // 每月支出列
+    $("r-ideal").textContent = ideal > 0 ? fmt(ideal) : "—";
 
     // 每月結餘
     let surplus = null;

@@ -91,6 +91,23 @@
         </div>
       </div>
 
+      <!-- 夢想清單 -->
+      <div class="dreams">
+        <div class="dreams-head">
+          <div class="col-title dream">✨ 夢想清單（未來的一次性目標）</div>
+          <button type="button" class="mini-btn" id="add-dream">＋ 新增夢想</button>
+        </div>
+        <p class="panel-desc">房子、旅遊、大額物品——不是每月都會發生的事。填總價和「幾年後想要」，自動攤提成本月需存金額。也可以填「夢想專屬收入」（例如為了買房而接的案），兩邊會互相抵扣。</p>
+        <div class="dream-row head-row">
+          <span>夢想</span><span class="c">總價</span><span class="c">幾年後</span><span class="c">夢想收入（稅前總額）</span><span class="c">每月還需存</span><span></span>
+        </div>
+        <div id="dream-list"></div>
+        <div class="result-row total-row">
+          <span class="r-label">夢想合計：總價 <span id="dream-sum">—</span>・夢想收入 <span id="dream-income-sum">—</span></span>
+          <span class="r-value" id="dream-total">—</span>
+        </div>
+      </div>
+
       <!-- 下方：資產與假設 + 結果 -->
       <div class="bottom-zone">
         <div class="bottom-inputs">
@@ -143,6 +160,14 @@
           <div class="result-row">
             <span class="r-label">🛟 資產跑道（只靠資產可活）</span>
             <span class="r-value big" id="r-runway">—</span>
+          </div>
+          <div class="result-row">
+            <span class="r-label">夢想儲蓄（每月需為夢想存）</span>
+            <span class="r-value" id="r-dream">—</span>
+          </div>
+          <div class="result-row">
+            <span class="r-label">扣掉夢想後結餘</span>
+            <span class="r-value" id="r-after-dream">—</span>
           </div>
           <div class="result-row">
             <span class="r-label">稅務試算（年收入 × 級距粗算）</span>

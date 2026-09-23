@@ -210,6 +210,98 @@ function makeList(listEl, storeKey, preset) {
   };
 }
 
+// ── 夢想清單：一次性目標，攤提每月需存 ──
+// 攤提公式：夢想總價（通膨調整後） − 夢想收入稅後淨額，除以目標月數
+function makeDreams(listEl, storeKey, onChange) {
+  const items = [];  // { name, cost, years, income }
+
+  function addItem(item = { name: "", cost: null, years: null, income: null }) {
+    items.push(item);
+
+    const row = document.createElement("div");
+    row.className = "dream-row";
+
+    function cell(cls, placeholder, value, type = "text") {
+      const el = document.createElement("input");
+      el.className = cls;
+      el.placeholder = placeholder;
+      if (type === "number") { el.type = "number"; el.min = "0"; }
+      el.value = value ?? "";
+      return el;
+    }
+    const name = cell("d-name", "例如：頭款、日本之旅", item.name);
+    const cost = cell("d-num c", "總價", item.cost, "number");
+    const years = cell("d-num c", "年", item.years, "number");
+    const income = cell("d-num c", "0", item.income, "number");
+    const need = document.createElement("span");
+    need.className = "d-need c";
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "del-btn";
+    del.textContent = "✕";
+    del.addEventListener("click", () => {
+      const i = items.indexOf(item);
+      if (i >= 0) items.splice(i, 1);
+      row.remove();
+      onChange();
+    });
+
+    name.addEventListener("input", () => { item.name = name.value; onChange(); });
+    cost.addEventListener("input", () => { item.cost = cost.value === "" ? null : Number(cost.value); onChange(); });
+    years.addEventListener("input", () => { item.years = years.value === "" ? null : Number(years.value); onChange(); });
+    income.addEventListener("input", () => { item.income = income.value === "" ? null : Number(income.value); onChange(); });
+
+    row.append(name, cost, years, income, need, del);
+    listEl.appendChild(row);
+    item._needEl = need;
+  }
+
+  // localStorage 還原
+  try {
+    const saved = JSON.parse(localStorage.getItem(storeKey) || "null");
+    if (Array.isArray(saved)) saved.forEach(it => addItem(it));
+  } catch (e) {}
+
+  return {
+    addItem,
+    // 每個夢想的「每月還需存」：通膨調整總價 − 夢想收入稅後淨，再除以月數
+    monthlyNeed(inflation, globalYears) {
+      let sum = 0;
+      for (const it of items) {
+        const cost = Number(it.cost) || 0;
+        let need = 0;
+        if (cost > 0) {
+          const years = Number(it.years) || globalYears || 0;
+          const inflated = cost * Math.pow(1 + inflation, years);
+          const months = Math.max(years * 12, 1);
+          const netIncome = it.income > 0
+            ? (it.income - taxAnnual(it.income)) : 0;
+          need = Math.max((inflated - netIncome) / months, 0);
+        }
+        if (it._needEl) {
+          it._needEl.textContent = need > 0 ? fmt(need) : "—";
+          it._needEl.classList.toggle("done", need === 0 && cost > 0);
+        }
+        sum += need;
+      }
+      // 清掉已移除項目的殘留 reference
+      return sum;
+    },
+    totalCost(inflation) {
+      return items.reduce((s, it) => {
+        const c = Number(it.cost) || 0;
+        const years = Number(it.years) || 0;
+        return s + (c > 0 ? c * Math.pow(1 + inflation, years) : 0);
+      }, 0);
+    },
+    totalIncome() {
+      return items.reduce((s, it) => s + (Number(it.income) || 0), 0);
+    },
+    save() { try { localStorage.setItem(storeKey, JSON.stringify(items.map(({ _needEl, ...rest }) => rest))); } catch (e) {} },
+  };
+}
+
 // ── 試算器 ──
 function setupEstimator(sum) {
   const $ = id => document.getElementById(id);
@@ -218,6 +310,9 @@ function setupEstimator(sum) {
   const income = makeList($("income-list"), "income-estimator-v1", ["本業", "副業"]);
   $("add-item").addEventListener("click", () => budget.addItem());
   $("add-income").addEventListener("click", () => income.addItem());
+
+  const dreams = makeDreams($("dream-list"), "dream-estimator-v1", compute);
+  $("add-dream").addEventListener("click", () => { dreams.addItem(); compute(); });
 
   function compute() {
     const total0 = budget.total;
@@ -258,6 +353,25 @@ function setupEstimator(sum) {
       $("r-surplus").style.color = surplus >= 0 ? "#4d8b6a" : "#c0392b";
     } else {
       $("r-surplus").textContent = "—";
+    }
+
+    // 夢想攤提
+    const dreamNeed = dreams.monthlyNeed(inflation, years);
+    const dreamCost = dreams.totalCost(inflation);
+    const dreamInc = dreams.totalIncome();
+    $("dream-sum").textContent = dreamCost > 0 ? fmt(dreamCost) : "—";
+    $("dream-income-sum").textContent = dreamInc > 0 ? fmt(dreamInc) : "—";
+    $("dream-total").textContent = dreamNeed > 0 ? `${fmt(dreamNeed)}/月` : "—";
+    $("r-dream").textContent = dreamNeed > 0 ? fmt(dreamNeed) : "—";
+
+    // 扣掉夢想後結餘
+    if (netMonthly != null) {
+      const after = surplus - dreamNeed;
+      const el = $("r-after-dream");
+      el.textContent = (after >= 0 ? "+" : "−") + fmt(Math.abs(after));
+      el.style.color = after >= 0 ? "#4d8b6a" : "#c0392b";
+    } else {
+      $("r-after-dream").textContent = "—";
     }
 
     // 資產跑道：總資產 / 每月支出（股票視為可變現，標註假設）
@@ -314,6 +428,7 @@ function setupEstimator(sum) {
 
     budget.save();
     income.save();
+    dreams.save();
   }
 
   budget.setListener(compute);

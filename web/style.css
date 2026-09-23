@@ -128,6 +128,37 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
 .budget-item input::placeholder { color: var(--ink-soft); opacity: 0.55; font-weight: 400; }
 .total-row { background: linear-gradient(120deg, #fdf0f3, #fbe3ea); }
 
+/* ═══ 夢想清單 ═══ */
+.dreams { margin-top: 22px; }
+.dreams-head {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+}
+.col-title.dream { background: linear-gradient(120deg, #f3ecf9, #e9def5); color: #6b4fa0; }
+.dream-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 0.6fr 1fr 1fr auto;
+  gap: 8px; align-items: center; margin-bottom: 8px;
+}
+.dream-row.head-row {
+  font-size: 0.75rem; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px;
+}
+.dream-row .c { text-align: center; }
+.dream-row input {
+  border: 1.5px solid var(--bg-bottom); border-radius: 10px;
+  background: var(--bg-top); padding: 9px 12px;
+  font-size: 0.9rem; color: var(--ink); outline: none; font-family: inherit;
+  min-width: 0; width: 100%;
+}
+.dream-row input:focus { border-color: #b48fd0; }
+.dream-row input.d-num { text-align: right; font-weight: 700; color: var(--rose-dark); }
+.d-need { font-weight: 700; color: #6b4fa0; font-size: 0.92rem; }
+.d-need.done { color: #4d8b6a; }
+@media (max-width: 760px) {
+  .dream-row { grid-template-columns: 1fr 1fr; }
+  .dream-row.head-row { display: none; }
+}
+
+
 .results { display: flex; flex-direction: column; gap: 10px; }
 .inputs label { font-size: 0.85rem; color: var(--ink-soft); font-weight: 600; }
 .input-row {

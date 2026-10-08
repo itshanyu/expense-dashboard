@@ -92,3 +92,30 @@ Sheets 試算表維持**完全私有**。網頁讀的 `data.json` 是**摘要版
 - push 若被拒（remote 有 Actions 的快照 commit），先 `git pull --rebase origin main` 再推（發生過兩次）。
 - 驗收線上 data.json 是否更新時注意 CDN 快取，加 `?t=<timestamp>` 或比對 `generatedAt` 欄位。
 - 本機預覽：`cd web && python3 -m http.server 8934`（瀏覽器自動化截圖曾被 Chrome 遠端除錯授權彈窗擋住，用 curl + node 驗證替代）。
+
+---
+
+## 4. 資產曲線（2026-10-08 新增）
+
+```
+方舟運算「調節庫存→全部庫存」頁（台股彙總：股票市值/成本/累積損益/今日損益）
+   ↓ Hermes cron d7b28a8d48f3，每天 14:00（script-only）
+~/.hermes/profiles/gus/scripts/ark_asset_snapshot.py
+   ├─ 重試 3 次（間隔 20 秒），全失敗 → Discord 記帳討論串通知
+   └─ 呼叫 ark-tools/ark_assets_dump.py（AX 讀取，uv + pyobjc）
+   ↓
+scripts/put_asset_snapshot.py → Google Sheets「Assets」頁籤
+   （欄位 Date|Time|MarketValue|Cost|TotalPnL|TodayPnL；冪等：同日覆寫）
+   ↓ 既有 export-snapshot.yml（每天 05:40 台北）
+scripts/export_snapshot.py → data.json 的 assetIndex
+   （指數化：起始日＝100，公開版不含任何實際金額——隱私設計）
+   ↓ deploy-pages.yml
+儀表板「資產曲線」面板（web/app.js drawAssetIndex）
+```
+
+注意：
+- 範圍＝台股（國泰＋永豐）；美股不在方舟「全部庫存」頁，未含。
+- 方舟是 iOS App：**Mac 螢幕睡眠/鎖定時整個 App 凍結**（AX 全空、caffeinate 喚不醒），
+  14:00 抓取失敗先查 `system_profiler SPDisplaysDataType | grep "Display Asleep"`。
+- 週末/休市照抓（市值不變，同日覆寫無副作用）。
+- 種子資料：2026-10-07（base day，指數=100）。

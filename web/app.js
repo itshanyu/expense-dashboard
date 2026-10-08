@@ -146,6 +146,39 @@ function drawMonthly(byMonth, months) {
   });
 }
 
+// ── 資產曲線（指數化：起始日＝100，無實際金額）──
+function drawAssetIndex(assetIndex) {
+  if (!assetIndex || !assetIndex.index || !Object.keys(assetIndex.index).length) {
+    document.getElementById("asset-empty").hidden = false;
+    document.getElementById("asset-note").hidden = true;
+    return;
+  }
+  const days = Object.keys(assetIndex.index).sort();
+  const vals = days.map(d => assetIndex.index[d]);
+  const baseLabel = "基準日 " + assetIndex.base + " ＝ 100";
+  new Chart(document.getElementById("asset-chart"), {
+    type: "line",
+    data: {
+      labels: days.map(d => d.slice(5)),
+      datasets: [{
+        label: baseLabel,
+        data: vals,
+        borderColor: "#9d4f66",
+        backgroundColor: "rgba(232,162,180,0.2)",
+        fill: true, tension: 0.3, pointRadius: 3,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: "#5c3a44", font: { size: 12 } } } },
+      scales: {
+        x: { ticks: { color: "#8a6572", maxTicksLimit: 10 } },
+        y: { ticks: { color: "#8a6572" } },
+      },
+    },
+  });
+}
+
 // ── 可複用的「項目列表」（支出預估表與收入來源共用）──
 function makeList(listEl, storeKey, preset) {
   const items = [];
@@ -461,5 +494,6 @@ function setupEstimator(sum) {
   drawPie(sum.byMonthCat[sum.thisMonth] || {});
   drawTrend(sum.dailyTotals);
   drawMonthly(sum.byMonth, sum.months);
+  drawAssetIndex(SNAPSHOT.assetIndex);
   setupEstimator(sum);
 })();

@@ -14,6 +14,7 @@
 
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -90,10 +91,68 @@ def build_full(records: list) -> dict:
     }
 
 
+def fetch_assets() -> list:
+    """讀 Assets 頁籤（資產日快照）。頁籤不存在視為沒有資料。"""
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    sheet_id = os.environ.get("EXPENSE_SHEET_ID")
+    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not sheet_id or not creds_path:
+        return []
+    creds = service_account.Credentials.from_service_account_file(
+        creds_path, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
+    svc = build("sheets", "v4", credentials=creds)
+    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    if not any(s["properties"]["title"] == "Assets" for s in meta["sheets"]):
+        return []
+    rows = svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range="Assets!A:F").execute().get("values", [])
+    out = []
+    for row in rows[1:]:
+        if len(row) < 3:
+            continue
+        try:
+            out.append({
+                "date": str(row[0]),
+                "time": str(row[1]) if len(row) > 1 else "",
+                "marketValue": float(row[2]),
+                "cost": float(row[3]) if len(row) > 3 else None,
+                "totalPnl": float(row[4]) if len(row) > 4 else None,
+                "todayPnl": float(row[5]) if len(row) > 5 else None,
+            })
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def build_asset_index(assets: list) -> dict:
+    """指數化資產曲線：第一天＝100。公開版不含任何實際金額。
+
+    同日多筆取最後一筆；base 取第一天。
+    """
+    if not assets:
+        return {}
+    by_day = {}
+    for a in assets:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", a["date"]):
+            continue
+        by_day[a["date"]] = a["marketValue"]
+    days = sorted(by_day)
+    base = by_day[days[0]]
+    if not base:
+        return {}
+    return {
+        "base": days[0],
+        "index": {d: round(v / base * 100, 2) for d, v in by_day.items()},
+    }
+
+
 def main() -> int:
     full = "--full" in sys.argv
     try:
         records = fetch_records()
+        assets = fetch_assets()
     except Exception as exc:  # noqa: BLE001
         print(f"匯出失敗：{exc}", file=sys.stderr)
         return 1
@@ -103,6 +162,9 @@ def main() -> int:
         "count": len(records),
         **(build_full(records) if full else build_summary(records)),
     }
+    idx = build_asset_index(assets)
+    if idx:
+        snapshot["assetIndex"] = idx  # 曲線一律指數化：公開版與本機版都不含實際金額
     OUT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1), encoding="utf-8")
     mode = "完整版（本機）" if full else "摘要版（公開安全）"
     print(f"已匯出 {len(records)} 筆（{mode}）→ {OUT}")

@@ -144,6 +144,25 @@
                 <span class="unit-r">年</span>
               </div>
             </label>
+            <label>投資年報酬率
+              <div class="input-row">
+                <input type="number" id="in-return" min="-50" max="100" step="0.5" value="5">
+                <span class="unit-r">%</span>
+              </div>
+              <div class="field-note" id="ark-return-note"></div>
+            </label>
+            <label>安全現金水位
+              <div class="input-row">
+                <input type="number" id="in-safety" min="0" max="36" step="1" value="3">
+                <span class="unit-r">個月支出</span>
+              </div>
+            </label>
+            <label>賣股票變現成本
+              <div class="input-row">
+                <input type="number" id="in-sellcost" min="0" max="10" step="0.05" value="0.45">
+                <span class="unit-r">%</span>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -157,10 +176,15 @@
                 <div class="a-value" id="r-assets">—</div>
                 <div class="a-sub">可動用資金 ＋ 股票市值</div>
               </div>
+              <div class="asset-card">
+                <div class="a-label">現金跑道</div>
+                <div class="a-value" id="r-cash-runway">—</div>
+                <div class="a-sub">完全不賣股票，<br>只花現金可以活多久</div>
+              </div>
               <div class="asset-card accent">
                 <div class="a-label">資產跑道</div>
                 <div class="a-value" id="r-runway">—</div>
-                <div class="a-sub">沒有任何收入，只靠這些資產<br>依照下面的每月預算，可以活這麼久</div>
+                <div class="a-sub">現金燒到安全水位就自動賣股票補（股票按報酬率滾、支出按通膨漲），<br>照這樣花，全部資產可以活這麼久</div>
               </div>
             </div>
           </div>
@@ -175,6 +199,10 @@
             <div class="result-row">
               <span class="r-label">每月收入（右欄合計，已扣稅）<small id="r-tax"></small></span>
               <span class="r-value" id="r-net">—</span>
+            </div>
+            <div class="result-row">
+              <span class="r-label">投資增值（每月）<small>股票市值 × 年報酬率 ÷ 12；穩定大於每月支出，理論上就能只靠投資過活</small></span>
+              <span class="r-value" id="r-invest-gain">—</span>
             </div>
             <div class="result-row">
               <span class="r-label">每月結餘（收入 − 支出）<small>正數＝有剩，負數＝透支</small></span>
@@ -192,6 +220,10 @@
 
           <!-- C. 結論 -->
           <div class="r-group">
+            <div class="result-row">
+              <span class="r-label">補現金節奏<small>現金燒到安全水位時要補的量：賣股票（已含變現成本）或用工作收入補進來，兩種都行</small></span>
+              <span class="r-value" id="r-refill">—</span>
+            </div>
             <div class="result-row highlight">
               <span class="r-label">要過上面這種生活（支出＋夢想）<br>稅前月收入需要</span>
               <span class="r-value big" id="r-needed">—</span>

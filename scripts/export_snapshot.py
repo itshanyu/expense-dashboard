@@ -17,7 +17,7 @@ import os
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
 TAIPEI = timezone(timedelta(hours=8))
@@ -148,6 +148,33 @@ def build_asset_index(assets: list) -> dict:
     }
 
 
+def build_asset_return(assets: list) -> dict:
+    """方舟持股報酬率。公開版只放「比例與日期」，不含任何金額（隱私設計）。
+
+    - cumulative：最新一筆的累積損益 ÷ 總成本（方舟「全部庫存」頁口徑，台股）
+    - annualizedIndex：由指數化市值序列年化；含後續加碼資金進出，會高估，僅供參考
+    """
+    valid = [a for a in assets if re.match(r"^\d{4}-\d{2}-\d{2}$", a["date"])]
+    if not valid:
+        return {}
+    valid.sort(key=lambda a: a["date"])
+    last = valid[-1]
+    out = {"asOf": last["date"]}
+    if last.get("totalPnl") is not None and last.get("cost"):
+        out["cumulative"] = round(last["totalPnl"] / last["cost"], 4)
+
+    by_day = {}
+    for a in valid:
+        by_day[a["date"]] = a["marketValue"]
+    days = sorted(by_day)
+    span = (date.fromisoformat(days[-1]) - date.fromisoformat(days[0])).days
+    if span >= 60 and by_day[days[0]]:
+        out["annualizedIndex"] = round(
+            (by_day[days[-1]] / by_day[days[0]]) ** (365 / span) - 1, 4)
+        out["indexDays"] = span
+    return out
+
+
 def main() -> int:
     full = "--full" in sys.argv
     try:
@@ -165,6 +192,9 @@ def main() -> int:
     idx = build_asset_index(assets)
     if idx:
         snapshot["assetIndex"] = idx  # 曲線一律指數化：公開版與本機版都不含實際金額
+    ret = build_asset_return(assets)
+    if ret:
+        snapshot["assetReturn"] = ret  # 只有比例與日期，無金額
     OUT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1), encoding="utf-8")
     mode = "完整版（本機）" if full else "摘要版（公開安全）"
     print(f"已匯出 {len(records)} 筆（{mode}）→ {OUT}")

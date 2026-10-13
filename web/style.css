@@ -92,6 +92,10 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
 }
 .asset-grid label { font-size: 0.82rem; color: var(--ink-soft); font-weight: 600; }
 .asset-grid .input-row { margin-top: 5px; }
+.field-note {
+  font-size: 0.7rem; color: var(--ink-soft); font-weight: 400;
+  opacity: 0.8; line-height: 1.45; margin-top: 4px;
+}
 
 .input-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -140,7 +144,7 @@ h1 { font-size: 1.9rem; color: var(--rose-dark); letter-spacing: 0.05em; }
   margin: 12px 0 8px; padding-left: 4px;
 }
 .asset-cards {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
 }
 @media (max-width: 500px) { .asset-cards { grid-template-columns: 1fr; } }
 .asset-card {

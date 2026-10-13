@@ -30,6 +30,56 @@ function fmt(n) {
   return "$" + Math.round(n).toLocaleString("zh-TW");
 }
 
+function fmtMonths(mo) {
+  if (mo == null || isNaN(mo)) return "—";
+  if (!isFinite(mo)) return "∞ 永續";
+  const y = Math.floor(mo / 12), m = Math.round(mo % 12);
+  if (y > 0) return m > 0 ? `${y} 年 ${m} 個月` : `${y} 年`;
+  return `${Math.round(mo * 10) / 10} 個月`;
+}
+
+// ── 水池模擬：現金池先花，燒到安全水位就從股票變現補足 ──
+// 股票按年報酬率月複利成長、支出按通膨月增；賣股扣變現成本。
+// 回傳 { cashMonths, totalMonths（Infinity＝照這樣花不會花完）, sells: [{month, amount}] }
+function simulateRunway(cash, stock, monthly, annualReturn, inflation, safetyMonths, sellCostPct) {
+  const sells = [];
+  if (monthly <= 0) return { cashMonths: cash > 0 ? Infinity : 0, totalMonths: Infinity, sells };
+  const cashMonths = cash / monthly;
+  if (cash + stock <= 0) return { cashMonths: 0, totalMonths: 0, sells };
+  if (annualReturn <= -1) annualReturn = -0.99;
+  const mRet = Math.pow(1 + annualReturn, 1 / 12) - 1;
+  const MAX = 1200; // 模擬上限 100 年
+  let c = cash, s = stock, m = 0;
+  while (m < MAX) {
+    const spend = monthly * Math.pow(1 + inflation, m / 12);
+    c -= spend;
+    if (c < 0) {
+      // 現金透支：賣股票補（賣出的市值要夠付變現成本後還能補上缺口）
+      if (s <= 0) return { cashMonths, totalMonths: m + Math.max((c + spend) / spend, 0), sells };
+      const sell = Math.min(-c / (1 - sellCostPct), s);
+      s -= sell;
+      c += sell * (1 - sellCostPct);
+      if (c < 0) return { cashMonths, totalMonths: m + Math.max((c + spend) / spend, 0), sells };
+    }
+    // 補水：現金低於安全水位（N 個月支出）→ 從股票補到「(2N−0.5) 個月支出」
+    // （推導後無論通膨與否，補水間隔都約 N 個月、一次補約 N 個月支出）
+    const safe = safetyMonths * spend;
+    if (safe > 0 && s > 0 && c < safe) {
+      const target = (2 * safetyMonths - 0.5) * spend;
+      const gap = target - c;
+      const sell = gap / (1 - sellCostPct);
+      if (sell <= s) {
+        s -= sell;
+        c = target;
+        sells.push({ month: m + 1, amount: gap });
+      }
+    }
+    s *= (1 + mRet);
+    m++;
+  }
+  return { cashMonths, totalMonths: Infinity, sells };
+}
+
 let SNAPSHOT = null;
 
 async function loadSnapshot() {
@@ -347,6 +397,46 @@ function setupEstimator(sum) {
   const dreams = makeDreams($("dream-list"), "dream-estimator-v1", compute);
   $("add-dream").addEventListener("click", () => { dreams.addItem(); compute(); });
 
+  // 投資假設：報酬率預設帶方舟快照的實際報酬（使用者手動改過就固定用他的）
+  const AR = SNAPSHOT.assetReturn || {};
+  const savedAssum = (() => {
+    try { return JSON.parse(localStorage.getItem("asset-assumptions-v1") || "null"); }
+    catch (e) { return null; }
+  })() || {};
+  if (savedAssum.ret != null && savedAssum.manualReturn) {
+    $("in-return").value = savedAssum.ret;
+  } else if (AR.annualizedIndex != null) {
+    $("in-return").value = Math.round(AR.annualizedIndex * 1000) / 10;
+  } else if (AR.cumulative != null) {
+    $("in-return").value = Math.round(AR.cumulative * 1000) / 10;
+  }
+  if (savedAssum.safety != null) $("in-safety").value = savedAssum.safety;
+  if (savedAssum.sellcost != null) $("in-sellcost").value = savedAssum.sellcost;
+
+  const arkNote = $("ark-return-note");
+  if (AR.cumulative != null) {
+    let t = `方舟台股累積報酬 ${(AR.cumulative * 100).toFixed(1)}%（至 ${AR.asOf}）`;
+    if (AR.annualizedIndex != null)
+      t += `・市值序列年化 ${(AR.annualizedIndex * 100).toFixed(1)}%（含加碼資金，偏高僅供參考）`;
+    arkNote.textContent = t;
+  } else {
+    arkNote.textContent = "方舟快照還沒有報酬資料；可用長期平均估（例如全球股市約 5%）";
+  }
+
+  function saveAssumptions(manualReturn) {
+    try {
+      localStorage.setItem("asset-assumptions-v1", JSON.stringify({
+        ret: $("in-return").value,
+        safety: $("in-safety").value,
+        sellcost: $("in-sellcost").value,
+        manualReturn,
+      }));
+    } catch (e) {}
+  }
+  $("in-return").addEventListener("input", () => saveAssumptions(true));
+  $("in-safety").addEventListener("input", () => saveAssumptions(false));
+  $("in-sellcost").addEventListener("input", () => saveAssumptions(false));
+
   function compute() {
     const total0 = budget.total;
     const income0 = income.total;
@@ -354,6 +444,9 @@ function setupEstimator(sum) {
     const stock = Number($("in-stock").value) || 0;
     const inflation = (Number($("in-inflation").value) || 0) / 100;
     const years = Number($("in-years").value) || 0;
+    const annualReturn = (Number($("in-return").value) || 0) / 100;
+    const safetyMonths = Number($("in-safety").value) || 0;
+    const sellCostPct = (Number($("in-sellcost").value) || 0) / 100;
 
     // 通膨調整：支出與收入都放大（收入假設不隨通膨自動漲，比較保守）
     const factor = Math.pow(1 + inflation, years);
@@ -411,18 +504,39 @@ function setupEstimator(sum) {
       $("r-after-dream").textContent = "—";
     }
 
-    // 資產跑道：總資產 / 每月支出（股票視為可變現，標註假設）
-    const assets = cash + stock;
-    let runwayMonths = null;
-    if (assets > 0 && ideal > 0) {
-      runwayMonths = assets / ideal;
-      const y = Math.floor(runwayMonths / 12);
-      const m = Math.round(runwayMonths % 12);
-      $("r-runway").textContent = y > 0 ? `${y} 年 ${m} 個月` : `${Math.round(runwayMonths * 10) / 10} 個月`;
-    } else if (assets > 0 && ideal === 0) {
-      $("r-runway").textContent = "填預算才知道";
+    // 資產跑道（水池模擬）：現金先花 → 低於安全水位就賣股票補 → 股票按報酬率滾、支出按通膨漲
+    const sim = simulateRunway(cash, stock, total0, annualReturn, inflation, safetyMonths, sellCostPct);
+    $("r-runway").textContent = (cash + stock > 0)
+      ? (ideal > 0 ? fmtMonths(sim.totalMonths) : "填預算才知道")
+      : "—";
+    $("r-cash-runway").textContent = (cash > 0 && ideal > 0)
+      ? fmtMonths(sim.cashMonths)
+      : (cash > 0 ? "填預算才知道" : "—");
+
+    // 投資增值（每月）：股票市值 × 月化報酬
+    const investGain = stock * (Math.pow(1 + annualReturn, 1 / 12) - 1);
+    const gainEl = $("r-invest-gain");
+    if (stock > 0) {
+      gainEl.textContent = fmt(investGain) + "/月";
+      gainEl.style.color = (ideal > 0 && investGain >= ideal) ? "#4d8b6a" : "";
     } else {
-      $("r-runway").textContent = "—";
+      gainEl.textContent = "—";
+    }
+
+    // 補現金節奏：模擬裡每次「從股票補水進現金池」的時間與金額（顯示第一筆＋近期節奏）
+    const refillEl = $("r-refill");
+    if (ideal <= 0 || cash + stock <= 0) {
+      refillEl.textContent = "—";
+    } else if (!sim.sells.length) {
+      refillEl.textContent = sim.totalMonths === Infinity
+        ? "現金夠用，還不需要補" : "—";
+    } else {
+      const next = sim.sells[0];
+      const n = Math.min(sim.sells.length, 4); // 近期節奏：前 4 筆的平均間隔
+      const gap = n >= 2
+        ? (sim.sells[n - 1].month - sim.sells[0].month) / (n - 1)
+        : next.month;
+      refillEl.textContent = `第 ${next.month} 個月補第一筆 ${fmt(next.amount)}，之後每隔約 ${Math.max(Math.round(gap), 1)} 個月一次`;
     }
 
     // 維持預算所需的稅前月收入（二分反推）
@@ -443,20 +557,21 @@ function setupEstimator(sum) {
     // 判定
     const verdict = $("r-verdict");
     verdict.className = "verdict";
+    const assets = cash + stock;
     const hasAssets = assets > 0;
     if (ideal > 0 && netMonthly != null && hasAssets) {
       const gap = surplus;
       if (gap >= 0) {
-        const growMonths = gap > 0 ? assets / gap : Infinity;
-        verdict.textContent = `收入撐得起這份預算：每月多 ${fmt(gap)}，加上資產 ${fmt(assets)}，就算明天斷收入也有 ${$("r-runway").textContent} 跑道。`;
+        verdict.textContent = `收入撐得起這份預算：每月多 ${fmt(gap)}，加上資產 ${fmt(assets)}，就算明天斷收入也有 ${$("r-runway").textContent} 跑道（只花現金可撐 ${$("r-cash-runway").textContent}）。`;
         verdict.classList.add("good");
       } else {
-        const cover = runwayMonths != null ? runwayMonths.toFixed(1) : "?";
-        verdict.textContent = `每月缺口 ${fmt(-gap)}，目前靠資產可撐約 ${cover} 個月。要轉正，稅前月收入需 ${fmt(needed)}，或把預算壓到 ${fmt(netMonthly)} 以下。`;
+        verdict.textContent = `每月缺口 ${fmt(-gap)}，靠資產總共可撐 ${$("r-runway").textContent}。要轉正，稅前月收入需 ${fmt(needed)}，或把預算壓到 ${fmt(netMonthly)} 以下。`;
         verdict.classList.add("warn");
       }
     } else if (ideal > 0 && hasAssets) {
-      verdict.textContent = `資產 ${fmt(assets)} 只靠它可以活 ${$("r-runway").textContent}。填入收入來源可比對缺口。`;
+      verdict.textContent = sim.totalMonths === Infinity
+        ? `資產 ${fmt(assets)}，不工作也永遠花不完：投資增值已經蓋過支出。現金燒完前，記得照「補現金節奏」賣股或用收入補。`
+        : `資產 ${fmt(assets)} 可以活 ${$("r-runway").textContent}（只花現金 ${$("r-cash-runway").textContent}）。填入收入來源可比對缺口。`;
     } else if (ideal > 0) {
       verdict.textContent = `這份預算換算成稅前月收入需要 ${fmt(needed)}。`;
     } else {
@@ -470,7 +585,8 @@ function setupEstimator(sum) {
 
   budget.setListener(compute);
   income.setListener(compute);
-  ["in-cash", "in-stock", "in-inflation", "in-years"].forEach(id =>
+  ["in-cash", "in-stock", "in-inflation", "in-years",
+   "in-return", "in-safety", "in-sellcost"].forEach(id =>
     $(id).addEventListener("input", compute));
   compute();
 }
